@@ -4,7 +4,7 @@ This is python image with Oracle Instantclient installed for oracle support
 
 # LICENSE
 
-License can be read in [LICENSE](https://github.com/ntj125app/python-custom/blob/latest/LICENSE)
+License can be read in [LICENSE](https://github.com/ntjapps/python-custom/blob/latest/LICENSE)
 
 # UPDATE
 
