@@ -62,7 +62,7 @@ jobs:
           images: ${{ env.REGISTRY1 }}/${{ env.IMAGE_NAME1 }}
       - name: Build & Push
         id: build-and-push-packages
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
@@ -72,7 +72,7 @@ jobs:
           cache-to: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache,mode=max
       - name: Build & Push OCI
         id: build-and-push-packages-oci
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./oci
           push: ${{ github.event_name != 'pull_request' }}
