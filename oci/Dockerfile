@@ -15,6 +15,11 @@ RUN apt-get update && \
     unzip -qo sdk.zip && \
     rm -f oic.zip sdk.zip && \
     echo /usr/oracle/${ORACLE_ZIP_DIR} > /etc/ld.so.conf.d/oracle-instantclient.conf && \
+    # Debian 13 ships only libaio.so.1t64; Instant Client links against libaio.so.1.
+    for aio in /usr/lib/*/libaio.so.1t64; do \
+        [ -e "$(dirname "$aio")/libaio.so.1" ] || ln -s "$aio" "$(dirname "$aio")/libaio.so.1"; \
+    done && \
     ldconfig && \
+    ! ldd /usr/oracle/${ORACLE_ZIP_DIR}/libclntsh.so | grep 'not found' && \
     apt-get purge -y --auto-remove curl unzip && \
     rm -rf /var/lib/apt/lists/*
