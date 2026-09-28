@@ -11,8 +11,8 @@ RUN apt-get update && \
     curl -fsSL "https://download.oracle.com/otn_software/linux/instantclient/${ORACLE_SIMPLE_VERSION}/instantclient-basic-linux.x64-${ORACLE_VERSION}dbru.zip" -o /usr/oracle/oic.zip && \
     curl -fsSL "https://download.oracle.com/otn_software/linux/instantclient/${ORACLE_SIMPLE_VERSION}/instantclient-sdk-linux.x64-${ORACLE_VERSION}dbru.zip" -o /usr/oracle/sdk.zip && \
     cd /usr/oracle && \
-    unzip -q oic.zip && \
-    unzip -q sdk.zip && \
+    unzip -qo oic.zip && \
+    unzip -qo sdk.zip && \
     rm -f oic.zip sdk.zip && \
     echo /usr/oracle/${ORACLE_ZIP_DIR} > /etc/ld.so.conf.d/oracle-instantclient.conf && \
     ldconfig && \
