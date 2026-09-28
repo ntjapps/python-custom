@@ -1,8 +1,8 @@
 FROM python:3-slim
 
-ARG ORACLE_VERSION=21.13.0.0.0
-ARG ORACLE_SIMPLE_VERSION=2113000
-ARG ORACLE_ZIP_DIR=instantclient_21_13
+ARG ORACLE_VERSION=21.23.0.0.0
+ARG ORACLE_SIMPLE_VERSION=2123000
+ARG ORACLE_ZIP_DIR=instantclient_21_23
 
 # Update, install dependencies, download and install Oracle Instant Client in one RUN
 RUN apt-get update && \
