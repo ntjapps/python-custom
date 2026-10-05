@@ -27,25 +27,39 @@ jobs:
       packages: write
     steps:
       - name: Delete all containers from package without tags
-        uses: actions/delete-package-versions@v5
+        uses: dataaxiom/ghcr-cleanup-action@v1
         with:
-          package-name: ${{ vars.IMAGE_NAME }}
-          package-type: container
-          min-versions-to-keep: 20
-          delete-only-untagged-versions: true
-
+          package: ${{ vars.IMAGE_NAME }}
+          keep-n-untagged: 20
   build-packages:
     if: ${{ github.event_name != 'pull_request' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.arch.runner }}
+    strategy:
+      matrix:
+        arch:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+        image:
+          - name: default
+            context: .
+            suffix: ''
+          - name: oci
+            context: ./oci
+            suffix: -oci
+      fail-fast: false
     permissions:
       contents: read
       packages: write
 
     steps:
+      - name: Prepare
+        run: |
+          platform=${{ matrix.arch.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
       - name: Checkout
         uses: actions/checkout@v7
-      - name: Setup QEMU
-        uses: docker/setup-qemu-action@v4
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -60,23 +74,74 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY1 }}/${{ env.IMAGE_NAME1 }}
+          flavor: suffix=${{ matrix.image.suffix }},onlatest=true
       - name: Build & Push
         id: build-and-push-packages
         uses: docker/build-push-action@v7
         with:
-          context: .
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta-packages.outputs.tags }}
+          context: ${{ matrix.image.context }}
+          platforms: ${{ matrix.arch.platform }}
+          outputs: type=image,"name=${{ env.REGISTRY1 }}/${{ env.IMAGE_NAME1 }}",push-by-digest=true,name-canonical=true,push=true
           labels: ${{ steps.meta-packages.outputs.labels }}
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache,mode=max
-      - name: Build & Push OCI
-        id: build-and-push-packages-oci
-        uses: docker/build-push-action@v7
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache-${{ matrix.image.name }}-${{ env.PLATFORM_PAIR }}
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache-${{ matrix.image.name }}-${{ env.PLATFORM_PAIR }},mode=max
+      - name: Export digest
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.build-and-push-packages.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+      - name: Upload digest
+        uses: actions/upload-artifact@v7
         with:
-          context: ./oci
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta-packages.outputs.tags }}-oci
-          labels: ${{ steps.meta-packages.outputs.labels }}
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache,mode=max
+          name: digests-build-packages-${{ matrix.image.name }}-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+  build-packages-merge:
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    needs: build-packages
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - name: default
+            context: .
+            suffix: ''
+          - name: oci
+            context: ./oci
+            suffix: -oci
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-build-packages-${{ matrix.image.name }}-*
+          merge-multiple: true
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY1 }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Get & Set Container Metadata
+        id: meta-packages
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY1 }}/${{ env.IMAGE_NAME1 }}
+          flavor: suffix=${{ matrix.image.suffix }},onlatest=true
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY1 }}/${{ env.IMAGE_NAME1 }}@sha256:%s ' *)
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect "$(jq -r '.tags[0]' <<< "$DOCKER_METADATA_OUTPUT_JSON")"
