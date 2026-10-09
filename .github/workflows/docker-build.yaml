@@ -20,17 +20,6 @@ env:
   IMAGE_NAME2: ${{ vars.DOCKERHUB_REPO }}
 
 jobs:
-  cleanup-untagged-images:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Delete all containers from package without tags
-        uses: dataaxiom/ghcr-cleanup-action@v1
-        with:
-          package: ${{ vars.IMAGE_NAME }}
-          keep-n-untagged: 20
   build-packages:
     if: ${{ github.event_name != 'pull_request' }}
     runs-on: ${{ matrix.arch.runner }}
